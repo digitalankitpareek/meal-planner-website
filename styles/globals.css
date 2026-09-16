@@ -1,0 +1,46 @@
+:root {
+  --paper: #f5ecd7;
+  --paper-deep: #efe2c2;
+  --ink: #2a1d14;
+  --ink-soft: #5a4a3a;
+  --chili: #a63a2a;
+  --chili-deep: #8a2e20;
+  --turmeric: #c98a2e;
+  --curry: #4c6b3a;
+  --line: #d8c7a1;
+  --white: #fffbf2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Karla", sans-serif;
+}
+
+h1,
+h2,
+h3,
+.serif {
+  font-family: "Lora", serif;
+}
+
+button {
+  font-family: "Karla", sans-serif;
+  cursor: pointer;
+}
+
+a {
+  color: var(--chili);
+}
+
+input,
+textarea {
+  font-family: "Karla", sans-serif;
+}
