@@ -45,7 +45,30 @@ normally, just without the short personalization note.
 
 Every submitted lead appears as a new row in that Sheet automatically.
 
-## 3. Generate dish images (once, locally)
+## 3. Generate dish images
+
+Two ways to do this now:
+
+### Option A — on-site admin page (no terminal needed)
+
+1. Add `ADMIN_PASSWORD` to your Vercel environment variables (any password
+   you choose) and redeploy.
+2. Visit `https://your-site.vercel.app/admin/images`, enter that password.
+3. Click **Generate** on a dish, then **Download** the result.
+4. Save the downloaded file into `public/images/` in your repo with the
+   exact filename shown (e.g. `sab_bhindi.jpg`), then commit and push (via
+   GitHub Desktop, same as any other file change).
+
+**Why you still have to manually save each one:** Vercel's serverless
+functions run on a filesystem that resets on every request — a file the
+server writes doesn't stick around for other visitors or survive the next
+deploy. So generation happens live on your site, but saving the result into
+your repo is still a manual (quick) step. If you want that last step
+automated too, the standard next step is a persistent storage add-on like
+Vercel Blob — worth doing once you know the site gets real traffic, not
+before.
+
+### Option B — batch script, once, locally
 
 ```bash
 npm install
@@ -53,10 +76,9 @@ export OPENAI_API_KEY=sk-...
 node scripts/generate-images.js
 ```
 
-This creates `public/images/<recipe-id>.jpg` for each recipe. Commit those
-files and push — Vercel will serve them as static files from then on, at
-zero ongoing cost. If you skip this step entirely, the site just shows the
-built-in emoji icon for every dish instead — nothing breaks.
+This creates `public/images/<recipe-id>.jpg` for each recipe in one run.
+Commit those files and push. Either option leaves the site working fine
+with emoji icons if you skip images entirely.
 
 ## 4. Add YouTube recipe videos (optional, manual — by design)
 
@@ -72,6 +94,27 @@ This is deliberately manual rather than an automatic YouTube search — an
 automated search could easily surface a video that uses onion/garlic or
 heavy oil, which would undercut the entire point of this planner. Pick
 videos from a channel you trust, once, per dish.
+
+## Features in this version
+
+- **Goal → household → meals → plan** onboarding, with the first day free
+  to preview and the rest unlocked after phone/email capture.
+- **BMI reference per adult member** (age, optional gender/weight/height).
+  This is a standard weight÷height² screening number with WHO's usual
+  categories — not a diagnosis, and the UI says so. It does not change what
+  the generator cooks; your stated **goal** already controls oil level and
+  dish mix. Gender is collected but doesn't affect the BMI number itself
+  (it never does — that's just how BMI is defined). For under-18 members,
+  no adult category is shown, since children need age/sex-specific growth
+  charts instead.
+- **Swap** any single dish for another from the same course (a dal only
+  ever swaps for another dal), still respecting the visitor's goal (e.g. a
+  "gentle" plan will never swap in a high-oil dish) and season.
+- **Grocery list**, aggregated across the whole unlocked week, grouped by
+  Sabzi Mandi / Kirana / Dairy, with a "Copy list" button.
+- **Desktop-first layout**: navbar, hero, how-it-works, features, and a
+  multi-column week grid — collapses cleanly to one column on mobile.
+- **On-site admin image generator** at `/admin/images` (see above).
 
 ## Local development
 

@@ -2,17 +2,20 @@
  * Paste this into Extensions > Apps Script on the Google Sheet you want leads
  * saved to. See README.md for full deployment steps.
  *
- * What it does: receives a POST with {name, phone, email, goal, submittedAt}
- * and appends it as a new row. That's it — no other permissions needed.
+ * What it does: receives a POST with lead + household summary fields and
+ * appends it as a new row. No raw per-member biometrics are sent here — just
+ * a household size and an average adult BMI/category, computed server-side.
  */
 
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
 
-  // Add a header row once, if the sheet is empty.
   if (sheet.getLastRow() === 0) {
-    sheet.appendRow(["Submitted At", "Name", "Phone", "Email", "Goal"]);
+    sheet.appendRow([
+      "Submitted At", "Name", "Phone", "Email", "Goal",
+      "Household Size", "Adults", "Kids", "Avg Adult BMI", "Avg Adult BMI Category",
+    ]);
   }
 
   sheet.appendRow([
@@ -21,6 +24,11 @@ function doPost(e) {
     data.phone || "",
     data.email || "",
     data.goal || "",
+    data.householdSize || "",
+    data.adults || "",
+    data.kids || "",
+    data.avgAdultBmi || "",
+    data.avgAdultBmiCategory || "",
   ]);
 
   return ContentService

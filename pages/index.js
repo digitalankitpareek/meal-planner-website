@@ -18,9 +18,35 @@ const MEAL_OPTIONS = [
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+const GROCERY_GROUP_LABELS = {
+  vegetable: "Sabzi Mandi",
+  grain: "Kirana (grains & flours)",
+  dal: "Kirana (dals)",
+  dairy: "Dairy",
+  other: "Other",
+};
+
+/* ============================== BMI HELPERS ============================== */
+// Standard formula, standard WHO adult categories. This is a general
+// screening number, not a diagnosis — the UI says so wherever it appears.
+// Note: BMI itself is weight/height only; gender does not change the number.
+
+function computeBMI(weightKg, heightCm) {
+  const w = Number(weightKg);
+  const h = Number(heightCm) / 100;
+  if (!w || !h) return null;
+  return w / (h * h);
+}
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return "Underweight";
+  if (bmi < 25) return "Normal range";
+  if (bmi < 30) return "Overweight";
+  return "Obese";
+}
+
 /* ============================== SHARED BITS ============================== */
 
-function DishImage({ dish, size = 64 }) {
+function DishImage({ dish, size = 56 }) {
   const [failed, setFailed] = useState(false);
   const wrap = {
     width: size,
@@ -48,48 +74,131 @@ function DishImage({ dish, size = 64 }) {
   );
 }
 
-function DishCard({ dish }) {
+function DishRow({ dish, onSwap, swapping }) {
   return (
-    <div style={{ display: "flex", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--line)" }}>
+    <div className="dish-row">
       <DishImage dish={dish} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="serif" style={{ fontSize: 16, fontWeight: 600 }}>
+        <div className="serif" style={{ fontSize: 15, fontWeight: 600 }}>
           {dish.name}
         </div>
         {dish.ingredients.length > 0 && (
-          <div style={{ fontSize: 13, color: "var(--charcoal-soft)", marginTop: 2 }}>
-            {dish.ingredients.map((i) => `${i.name} (${i.qty})`).join(", ")}
+          <div style={{ fontSize: 12.5, color: "var(--charcoal-soft)", marginTop: 2 }}>
+            {dish.ingredients.map((i) => `${i.name} (${i.display})`).join(", ")}
           </div>
         )}
-        {dish.youtubeUrl && (
-          <a href={dish.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600 }}>
-            ▶ Watch recipe video
-          </a>
-        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+          {dish.youtubeUrl && (
+            <a href={dish.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, fontWeight: 600 }}>
+              ▶ Recipe video
+            </a>
+          )}
+          {onSwap && (
+            <button className="dish-swap-btn" onClick={onSwap} disabled={swapping}>
+              {swapping ? "Swapping…" : "🔄 Swap"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function DayPlan({ dayIndex, dayPlan, selectedMeals }) {
+function DayCard({ dayIndex, dayPlan, selectedMeals, onSwapDish, swappingKey }) {
   return (
-    <div style={{ marginBottom: 20 }}>
-      <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "var(--tomato-deep)" }}>{DAY_NAMES[dayIndex]}</h3>
+    <div className="day-card">
+      <h3>{DAY_NAMES[dayIndex]}</h3>
       {selectedMeals.map((mealKey) => {
         const dishes = dayPlan[mealKey] || [];
         if (dishes.length === 0) return null;
         const label = MEAL_OPTIONS.find((m) => m.key === mealKey)?.label || mealKey;
         return (
-          <div key={mealKey} style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--charcoal-soft)", textTransform: "uppercase", letterSpacing: 0.4, marginTop: 8 }}>
-              {label}
-            </div>
-            {dishes.map((d) => (
-              <DishCard key={d.id} dish={d} />
-            ))}
+          <div key={mealKey} className="meal-block">
+            <div className="meal-block-label">{label}</div>
+            {dishes.map((d, dishIndex) => {
+              const key = `${dayIndex}_${mealKey}_${dishIndex}`;
+              return (
+                <DishRow
+                  key={d.id + dishIndex}
+                  dish={d}
+                  swapping={swappingKey === key}
+                  onSwap={onSwapDish ? () => onSwapDish(dayIndex, mealKey, dishIndex) : null}
+                />
+              );
+            })}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function GroceryList({ plan, selectedMeals }) {
+  const [checked, setChecked] = useState({});
+  const totals = {}; // key: `${category}|${name}|${unit}` -> qty
+
+  for (const dayKey of Object.keys(plan)) {
+    for (const mealKey of selectedMeals) {
+      const dishes = plan[dayKey][mealKey] || [];
+      for (const dish of dishes) {
+        for (const ing of dish.ingredients) {
+          const key = `${ing.category}|${ing.name}|${ing.unit}`;
+          totals[key] = (totals[key] || 0) + ing.qty;
+        }
+      }
+    }
+  }
+
+  const groups = {};
+  for (const [key, qty] of Object.entries(totals)) {
+    const [category, name, unit] = key.split("|");
+    const groupLabel = GROCERY_GROUP_LABELS[category] || GROCERY_GROUP_LABELS.other;
+    if (!groups[groupLabel]) groups[groupLabel] = [];
+    const display = unit === "g" && qty >= 1000 ? `${(qty / 1000).toFixed(1)} kg` : unit === "ml" && qty >= 1000 ? `${(qty / 1000).toFixed(1)} L` : `${Math.round(qty)} ${unit === "piece" ? "pc" : unit}`;
+    groups[groupLabel].push({ key, name, display });
+  }
+  for (const g of Object.keys(groups)) groups[g].sort((a, b) => a.name.localeCompare(b.name));
+
+  const toggle = (key) => setChecked((c) => ({ ...c, [key]: !c[key] }));
+
+  const copyText = async () => {
+    let out = "Grocery list — this week\n\n";
+    for (const [group, items] of Object.entries(groups)) {
+      out += `${group}\n`;
+      for (const it of items) out += `- ${it.name}: ${it.display}\n`;
+      out += "\n";
+    }
+    try {
+      await navigator.clipboard.writeText(out);
+    } catch (e) {
+      /* clipboard may be unavailable */
+    }
+  };
+
+  return (
+    <div className="grocery-section">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ margin: 0, fontSize: 20 }}>Your grocery list for the week</h3>
+        <button className="btn-secondary" onClick={copyText}>
+          Copy list
+        </button>
+      </div>
+      <div className="grocery-grid">
+        {Object.entries(groups).map(([group, items]) => (
+          <div className="grocery-group" key={group}>
+            <h4>{group}</h4>
+            {items.map((it) => (
+              <div key={it.key} className={`grocery-item ${checked[it.key] ? "checked" : ""}`} onClick={() => toggle(it.key)}>
+                <span>{it.name}</span>
+                <span>{it.display}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--charcoal-soft)", marginTop: 14 }}>
+        Spices and oil aren't listed — check your pantry stock separately.
+      </div>
     </div>
   );
 }
@@ -120,7 +229,7 @@ function SecondaryButton({ children, onClick }) {
   );
 }
 
-/* ============================== NAVBAR ============================== */
+/* ============================== NAVBAR / HERO / HOW-IT-WORKS / FEATURES / FOOTER ============================== */
 
 function Navbar() {
   const [open, setOpen] = useState(false);
@@ -152,8 +261,6 @@ function Navbar() {
   );
 }
 
-/* ============================== HERO ============================== */
-
 function Hero() {
   return (
     <section className="hero">
@@ -182,13 +289,11 @@ function Hero() {
   );
 }
 
-/* ============================== HOW IT WORKS ============================== */
-
 function HowItWorks() {
   const steps = [
     { n: 1, title: "Tell us your goal", body: "Weight loss, protein-rich, balanced, or gentle/low-oil for BP & cholesterol." },
-    { n: 2, title: "Tell us your household", body: "How many people, and their ages — we scale every portion to fit." },
-    { n: 3, title: "Get your weekly plan", body: "A full 7-day plan with ingredients for each dish, ready to cook from." },
+    { n: 2, title: "Tell us your household", body: "Age, and optionally height/weight — we scale every portion to fit." },
+    { n: 3, title: "Get your weekly plan", body: "A full 7-day plan with ingredients, swap options, and a grocery list." },
   ];
   return (
     <section className="section" id="how-it-works">
@@ -211,14 +316,12 @@ function HowItWorks() {
   );
 }
 
-/* ============================== FEATURES ============================== */
-
 function Features() {
   const items = [
     { emoji: "🧄", title: "No onion, no garlic", body: "Every recipe is built around this from the start, not filtered after the fact." },
     { emoji: "🫒", title: "Genuinely low oil", body: "Oil level is a hard constraint, not a suggestion — especially for gentler diets." },
-    { emoji: "🌱", title: "Seasonal & rotating", body: "Recipes rotate through the week and the season so nothing repeats too soon." },
-    { emoji: "🛒", title: "Ready-to-cook ingredients", body: "Every dish lists exactly what you need, scaled to your household size." },
+    { emoji: "🔄", title: "Swap any dish", body: "Don't like today's sabzi? Swap it for another from the same category, instantly." },
+    { emoji: "🛒", title: "Auto grocery list", body: "Every ingredient across your week, totalled and grouped by shop section." },
   ];
   return (
     <section className="section features" id="why-us">
@@ -241,15 +344,14 @@ function Features() {
   );
 }
 
-/* ============================== FOOTER ============================== */
-
 function Footer() {
   return (
     <footer className="site-footer">
       <div className="container">
         <div className="brand">🥦 {SITE_NAME}</div>
         <div className="disclaimer">
-          General food suggestions only — not medical or dietary advice for any health condition.
+          General food suggestions only — not medical or dietary advice for any health condition. BMI shown is a
+          standard screening number, not a diagnosis.
         </div>
       </div>
     </footer>
@@ -258,11 +360,13 @@ function Footer() {
 
 /* ============================== PLANNER WIZARD ============================== */
 
+const emptyMember = { age: "", gender: "", weightKg: "", heightCm: "" };
+
 function PlannerWizard() {
-  const [step, setStep] = useState("goal"); // goal -> household -> meals -> loading -> preview -> full
+  const [step, setStep] = useState("goal");
   const [goal, setGoal] = useState(null);
   const [customGoal, setCustomGoal] = useState("");
-  const [members, setMembers] = useState([{ age: "" }]);
+  const [members, setMembers] = useState([{ ...emptyMember }]);
   const [selectedMeals, setSelectedMeals] = useState(["breakfast", "lunch", "dinner"]);
   const [planData, setPlanData] = useState(null);
   const [genError, setGenError] = useState(null);
@@ -270,17 +374,18 @@ function PlannerWizard() {
   const [leadError, setLeadError] = useState(null);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const [swappingKey, setSwappingKey] = useState(null);
 
   const canContinueGoal = goal && (goal !== "other" || customGoal.trim().length > 0);
   const canContinueHousehold = members.length > 0 && members.every((m) => String(m.age).trim() !== "" && Number(m.age) > 0);
   const canGenerate = selectedMeals.length > 0;
 
-  const updateMemberAge = (idx, age) => {
+  const updateMember = (idx, patch) => {
     const next = [...members];
-    next[idx] = { age };
+    next[idx] = { ...next[idx], ...patch };
     setMembers(next);
   };
-  const addMember = () => setMembers([...members, { age: "" }]);
+  const addMember = () => setMembers([...members, { ...emptyMember }]);
   const removeMember = (idx) => setMembers(members.filter((_, i) => i !== idx));
 
   const toggleMeal = (key) => {
@@ -314,7 +419,7 @@ function PlannerWizard() {
       const res = await fetch("/api/save-lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...lead, goal: goal === "other" ? customGoal : goal }),
+        body: JSON.stringify({ ...lead, goal: goal === "other" ? customGoal : goal, members }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save your details.");
@@ -327,10 +432,44 @@ function PlannerWizard() {
     }
   };
 
+  const handleSwapDish = async (dayIndex, mealKey, dishIndex) => {
+    const key = `${dayIndex}_${mealKey}_${dishIndex}`;
+    setSwappingKey(key);
+    try {
+      const currentDish = planData.plan[String(dayIndex)][mealKey][dishIndex];
+      const excludeIds = [];
+      for (const dayKey of Object.keys(planData.plan)) {
+        for (const mk of Object.keys(planData.plan[dayKey])) {
+          for (const d of planData.plan[dayKey][mk]) excludeIds.push(d.id);
+        }
+      }
+      const res = await fetch("/api/swap-dish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          goal: planData.goal,
+          mealKey,
+          currentDishId: currentDish.id,
+          excludeIds,
+          household: planData.household,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.dish) return; // silently keep the current dish if no alternative
+      const next = JSON.parse(JSON.stringify(planData));
+      next.plan[String(dayIndex)][mealKey][dishIndex] = data.dish;
+      setPlanData(next);
+    } finally {
+      setSwappingKey(null);
+    }
+  };
+
+  const showingPlan = step === "preview" || step === "full";
+
   return (
-    <div className="planner-card">
+    <div className={`planner-card ${showingPlan ? "wide" : ""}`}>
       {step === "goal" && (
-        <section>
+        <section style={{ maxWidth: 560, margin: "0 auto" }}>
           <h2 style={{ fontSize: 20, marginBottom: 4 }}>What's your main goal?</h2>
           <p style={{ fontSize: 14, color: "var(--charcoal-soft)", marginTop: 0 }}>We'll shape your weekly plan around this.</p>
           {GOALS.map((g) => (
@@ -376,27 +515,53 @@ function PlannerWizard() {
       )}
 
       {step === "household" && (
-        <section>
+        <section style={{ maxWidth: 620, margin: "0 auto" }}>
           <h2 style={{ fontSize: 20, marginBottom: 4 }}>Who are you cooking for?</h2>
-          <p style={{ fontSize: 14, color: "var(--charcoal-soft)", marginTop: 0 }}>Add each family member's age.</p>
-          {members.map((m, idx) => (
-            <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 14, width: 74 }}>Member {idx + 1}</span>
-              <input
-                type="number"
-                min="0"
-                placeholder="Age"
-                value={m.age}
-                onChange={(e) => updateMemberAge(idx, e.target.value)}
-                style={{ width: 90, padding: 8, borderRadius: 8, border: "1px solid var(--line)", fontSize: 14 }}
-              />
-              {members.length > 1 && (
-                <button onClick={() => removeMember(idx)} style={{ border: "none", background: "transparent", color: "var(--tomato)", fontSize: 13 }}>
-                  Remove
-                </button>
-              )}
-            </div>
-          ))}
+          <p style={{ fontSize: 14, color: "var(--charcoal-soft)", marginTop: 0 }}>
+            Age is required. Gender, weight and height are optional — if you add weight and height, we'll show a BMI
+            reference for that member.
+          </p>
+          {members.map((m, idx) => {
+            const bmi = computeBMI(m.weightKg, m.heightCm);
+            const isAdult = Number(m.age) >= 18;
+            return (
+              <div className="member-row" key={idx}>
+                <div className="member-row-header">
+                  <strong style={{ fontSize: 14 }}>Member {idx + 1}</strong>
+                  {members.length > 1 && (
+                    <button onClick={() => removeMember(idx)} style={{ border: "none", background: "transparent", color: "var(--tomato)", fontSize: 13 }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="member-fields">
+                  <input type="number" min="0" placeholder="Age" value={m.age} onChange={(e) => updateMember(idx, { age: e.target.value })} style={inputStyle} />
+                  <select value={m.gender} onChange={(e) => updateMember(idx, { gender: e.target.value })} style={inputStyle}>
+                    <option value="">Gender (optional)</option>
+                    <option value="female">Female</option>
+                    <option value="male">Male</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <input type="number" min="0" placeholder="Weight (kg)" value={m.weightKg} onChange={(e) => updateMember(idx, { weightKg: e.target.value })} style={inputStyle} />
+                  <input type="number" min="0" placeholder="Height (cm)" value={m.heightCm} onChange={(e) => updateMember(idx, { heightCm: e.target.value })} style={inputStyle} />
+                </div>
+                {bmi && (
+                  <div className={`bmi-note ${!isAdult ? "warn" : ""}`}>
+                    {isAdult ? (
+                      <>
+                        BMI: <strong>{bmi.toFixed(1)}</strong> — {bmiCategory(bmi)}. This is a standard screening number
+                        from weight and height only (gender doesn't change it) — not a diagnosis. Your goal above already
+                        shapes the plan's oil level and dish mix; for a specific weight target, check with a doctor or
+                        dietitian.
+                      </>
+                    ) : (
+                      <>BMI categories for under-18s use age-and-sex growth charts, not adult thresholds — skipping a category here; ask a pediatrician if you'd like one.</>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <button
             onClick={addMember}
             style={{ border: `1px dashed var(--line)`, background: "transparent", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginBottom: 18 }}
@@ -413,7 +578,7 @@ function PlannerWizard() {
       )}
 
       {step === "meals" && (
-        <section>
+        <section style={{ maxWidth: 560, margin: "0 auto" }}>
           <h2 style={{ fontSize: 20, marginBottom: 4 }}>Which meals do you want planned?</h2>
           <p style={{ fontSize: 14, color: "var(--charcoal-soft)", marginTop: 0 }}>Pick at least one.</p>
           {MEAL_OPTIONS.map((m) => (
@@ -451,47 +616,66 @@ function PlannerWizard() {
         </section>
       )}
 
-      {(step === "preview" || step === "full") && planData && (
+      {showingPlan && planData && (
         <section>
           {planData.note && (
-            <div style={{ background: "var(--leaf-light)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 16, fontSize: 14 }}>
+            <div style={{ background: "var(--leaf-light)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 14, maxWidth: 720 }}>
               {planData.note}
             </div>
           )}
 
-          <DayPlan dayIndex={0} dayPlan={planData.plan["0"]} selectedMeals={selectedMeals} />
-
           {!unlocked && (
-            <div style={{ position: "relative" }}>
-              <div style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.6 }}>
-                {[1, 2, 3].map((d) => (
-                  <DayPlan key={d} dayIndex={d} dayPlan={planData.plan[String(d)]} selectedMeals={selectedMeals} />
-                ))}
+            <>
+              <div className="week-grid" style={{ marginBottom: 20 }}>
+                <DayCard dayIndex={0} dayPlan={planData.plan["0"]} selectedMeals={selectedMeals} onSwapDish={handleSwapDish} swappingKey={swappingKey} />
               </div>
-              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 30 }}>
-                <div style={{ background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: 18, maxWidth: 420, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
-                  <div className="serif" style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>
-                    Unlock your full 7-day plan
+
+              <div style={{ position: "relative" }}>
+                <div className="week-grid" style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.55 }}>
+                  {[1, 2, 3].map((d) => (
+                    <DayCard key={d} dayIndex={d} dayPlan={planData.plan[String(d)]} selectedMeals={selectedMeals} />
+                  ))}
+                </div>
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 30 }}>
+                  <div style={{ background: "var(--white)", border: "1px solid var(--line)", borderRadius: 12, padding: 18, maxWidth: 420, width: "100%", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+                    <div className="serif" style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>
+                      Unlock your full 7-day plan
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--charcoal-soft)", marginBottom: 14 }}>
+                      Enter your details and we'll show the rest of the week, plus your grocery list.
+                    </div>
+                    <form onSubmit={handleLeadSubmit}>
+                      <input placeholder="Name (optional)" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} style={inputStyle} />
+                      <input placeholder="Phone number" value={lead.phone} onChange={(e) => setLead({ ...lead, phone: e.target.value })} style={inputStyle} required />
+                      <input placeholder="Email" type="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} style={inputStyle} required />
+                      {leadError && <div style={{ color: "var(--tomato-deep)", fontSize: 13, marginBottom: 8 }}>⚠ {leadError}</div>}
+                      <PrimaryButton type="submit" disabled={leadSubmitting}>
+                        {leadSubmitting ? "Saving…" : "Show my full week"}
+                      </PrimaryButton>
+                    </form>
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--charcoal-soft)", marginBottom: 14 }}>
-                    Enter your details and we'll show the rest of the week right here.
-                  </div>
-                  <form onSubmit={handleLeadSubmit}>
-                    <input placeholder="Name (optional)" value={lead.name} onChange={(e) => setLead({ ...lead, name: e.target.value })} style={inputStyle} />
-                    <input placeholder="Phone number" value={lead.phone} onChange={(e) => setLead({ ...lead, phone: e.target.value })} style={inputStyle} required />
-                    <input placeholder="Email" type="email" value={lead.email} onChange={(e) => setLead({ ...lead, email: e.target.value })} style={inputStyle} required />
-                    {leadError && <div style={{ color: "var(--tomato-deep)", fontSize: 13, marginBottom: 8 }}>⚠ {leadError}</div>}
-                    <PrimaryButton type="submit" disabled={leadSubmitting}>
-                      {leadSubmitting ? "Saving…" : "Show my full week"}
-                    </PrimaryButton>
-                  </form>
                 </div>
               </div>
-            </div>
+            </>
           )}
 
-          {unlocked &&
-            [1, 2, 3, 4, 5, 6].map((d) => <DayPlan key={d} dayIndex={d} dayPlan={planData.plan[String(d)]} selectedMeals={selectedMeals} />)}
+          {unlocked && (
+            <>
+              <div className="week-grid">
+                {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+                  <DayCard
+                    key={d}
+                    dayIndex={d}
+                    dayPlan={planData.plan[String(d)]}
+                    selectedMeals={selectedMeals}
+                    onSwapDish={handleSwapDish}
+                    swappingKey={swappingKey}
+                  />
+                ))}
+              </div>
+              <GroceryList plan={planData.plan} selectedMeals={selectedMeals} />
+            </>
+          )}
         </section>
       )}
     </div>

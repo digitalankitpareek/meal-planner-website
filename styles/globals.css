@@ -295,6 +295,132 @@ textarea {
   padding: 36px;
   box-shadow: 0 12px 32px rgba(35, 48, 31, 0.08);
 }
+.planner-card.wide {
+  max-width: 1120px;
+}
+
+/* ---------- Week grid (desktop-optimized full plan) ---------- */
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.day-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+}
+.day-card h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  color: var(--tomato-deep);
+}
+.meal-block {
+  margin-bottom: 10px;
+}
+.meal-block-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--charcoal-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+.dish-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dish-row:last-child {
+  border-bottom: none;
+}
+.dish-swap-btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--tomato);
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 4px;
+}
+.dish-swap-btn:hover {
+  border-color: var(--tomato);
+}
+.dish-swap-btn:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- Grocery list ---------- */
+
+.grocery-section {
+  margin-top: 36px;
+}
+.grocery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+.grocery-group h4 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--charcoal-soft);
+  margin: 0 0 8px;
+}
+.grocery-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  cursor: pointer;
+}
+.grocery-item.checked {
+  text-decoration: line-through;
+  color: var(--charcoal-soft);
+}
+
+/* ---------- Member / BMI card ---------- */
+
+.member-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.member-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.member-fields {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.bmi-note {
+  margin-top: 10px;
+  font-size: 13px;
+  background: var(--leaf-light);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--charcoal);
+}
+.bmi-note.warn {
+  background: #fbe9e4;
+  color: var(--tomato-deep);
+}
+
+@media (max-width: 640px) {
+  .member-fields {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 
 /* ---------- Footer ---------- */
 

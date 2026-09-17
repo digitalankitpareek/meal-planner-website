@@ -13,13 +13,47 @@ function isPlausibleEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ""));
 }
 
+function computeBMI(weightKg, heightCm) {
+  const w = Number(weightKg);
+  const h = Number(heightCm) / 100;
+  if (!w || !h) return null;
+  return w / (h * h);
+}
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return "Underweight";
+  if (bmi < 25) return "Normal range";
+  if (bmi < 30) return "Overweight";
+  return "Obese";
+}
+
+// Summarises the household into a few flat columns rather than dumping raw
+// per-member biometrics into the sheet — enough for lead context, without
+// turning the sheet into a health-data store.
+function summarizeHousehold(members) {
+  const list = Array.isArray(members) ? members : [];
+  const adults = list.filter((m) => Number(m.age) >= 18).length;
+  const kids = list.length - adults;
+  const adultBmis = list
+    .filter((m) => Number(m.age) >= 18)
+    .map((m) => computeBMI(m.weightKg, m.heightCm))
+    .filter((b) => b !== null);
+  const avgBmi = adultBmis.length ? adultBmis.reduce((a, b) => a + b, 0) / adultBmis.length : null;
+  return {
+    householdSize: list.length,
+    adults,
+    kids,
+    avgAdultBmi: avgBmi ? Math.round(avgBmi * 10) / 10 : "",
+    avgAdultBmiCategory: avgBmi ? bmiCategory(avgBmi) : "",
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  const { name, phone, email, goal } = req.body || {};
+  const { name, phone, email, goal, members } = req.body || {};
 
   if (!isPlausiblePhone(phone) || !isPlausibleEmail(email)) {
     res.status(400).json({ error: "Please provide a valid phone number and email." });
@@ -34,6 +68,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const household = summarizeHousehold(members);
     const sheetRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,6 +77,7 @@ export default async function handler(req, res) {
         phone,
         email,
         goal: goal || "",
+        ...household,
         submittedAt: new Date().toISOString(),
       }),
     });

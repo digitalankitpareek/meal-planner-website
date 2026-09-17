@@ -100,6 +100,7 @@ function serializePlanForResponse(plan, adults, kids, kidFactor) {
         .map((rec) => ({
           id: rec.id,
           name: rec.name,
+          course: rec.course, // needed client-side so "swap" fetches from the same course group
           emoji: getDishEmoji(rec),
           effort: rec.effort,
           oilLevel: rec.oilLevel,
@@ -108,10 +109,16 @@ function serializePlanForResponse(plan, adults, kids, kidFactor) {
           ingredients: rec.ingredients
             .map((ing) => ({ ing, meta: ING_BY_ID[ing.id] }))
             .filter(({ meta }) => meta && meta.category !== "spice" && meta.category !== "oil")
-            .map(({ ing, meta }) => ({
-              name: meta.name,
-              qty: formatQty(scaleQty(ing.qty, adults, kids, kidFactor), meta.unit),
-            })),
+            .map(({ ing, meta }) => {
+              const rawQty = scaleQty(ing.qty, adults, kids, kidFactor);
+              return {
+                name: meta.name,
+                category: meta.category, // used to group the grocery list (vegetable/grain/dal/dairy)
+                unit: meta.unit,
+                qty: Math.round(rawQty * 100) / 100, // raw number — grocery list sums these
+                display: formatQty(rawQty, meta.unit), // pre-formatted for per-dish display
+              };
+            }),
         }));
     }
   }
@@ -154,6 +161,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       season,
       household,
+      goal: internalGoal,
       warnings,
       note,
       plan: serializePlanForResponse(plan, household.adults, household.kids, household.kidFactor),
