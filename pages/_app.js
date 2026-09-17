@@ -5,7 +5,7 @@ export default function App({ Component, pageProps }) {
   return (
     <>
       <Head>
-        <title>Ghar ka Khana — Your Weekly Indian Vegetarian Meal Plan</title>
+        <title>Vegetarian Meal Planner — Free Weekly Indian Diet Plan</title>
         <meta
           name="description"
           content="Get a free personalized Indian vegetarian weekly meal plan — no onion, no garlic, low oil. Tell us your goal and household, get your plan."
