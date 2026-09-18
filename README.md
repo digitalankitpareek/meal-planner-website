@@ -95,10 +95,27 @@ automated search could easily surface a video that uses onion/garlic or
 heavy oil, which would undercut the entire point of this planner. Pick
 videos from a channel you trust, once, per dish.
 
+## Local development
+
+```bash
+npm install
+cp .env.example .env.local   # fill in your keys
+npm run dev
+```
+
+Visit http://localhost:3000.
+
 ## Features in this version
 
 - **Goal → household → meals → plan** onboarding, with the first day free
   to preview and the rest unlocked after phone/email capture.
+- **Session persistence**: your in-progress or completed plan survives a
+  page refresh, saved in that browser's local storage. This is NOT a real
+  login system — it's tied to one browser on one device, has no password,
+  and clearing browser data clears it. See "About real accounts" below if
+  you want actual email+password login.
+- **Today-first week order**: the display starts from the visitor's actual
+  today (read from their browser's local date), not always Monday.
 - **BMI reference per adult member** (age, optional gender/weight/height).
   This is a standard weight÷height² screening number with WHO's usual
   categories — not a diagnosis, and the UI says so. It does not change what
@@ -112,19 +129,39 @@ videos from a channel you trust, once, per dish.
   "gentle" plan will never swap in a high-oil dish) and season.
 - **Grocery list**, aggregated across the whole unlocked week, grouped by
   Sabzi Mandi / Kirana / Dairy, with a "Copy list" button.
+- **Recipe blurb** per dish (a short "how this is made" description) behind
+  a "📖 Recipe" toggle, plus a prominent "▶ Watch Recipe Video" button
+  wherever you've added a YouTube link.
+- **Approximate protein per ingredient and per dish**, clearly labelled as
+  an estimate — see the disclaimer note below.
 - **Desktop-first layout**: navbar, hero, how-it-works, features, and a
   multi-column week grid — collapses cleanly to one column on mobile.
 - **On-site admin image generator** at `/admin/images` (see above).
 
-## Local development
+## About real accounts (email + password login)
 
-```bash
-npm install
-cp .env.example .env.local   # fill in your keys
-npm run dev
-```
+Session persistence above solves "why do I get logged out on refresh" —
+but it's not the same as a real account you can log into from a different
+device. A proper login system (send a password by email, log in later from
+anywhere) needs two things this project doesn't have yet:
 
-Visit http://localhost:3000.
+1. **A real database** to store user credentials — the Google Sheet is
+   write-only from the app's side and isn't suitable as an auth backend.
+2. **An email-sending service** (e.g. Resend, SendGrid) to actually deliver
+   a password, plus secure password hashing and a login page.
+
+This is a legitimate v2 project, not a small addition — happy to scope it
+properly (a service like Supabase bundles auth + a database reasonably
+cheaply) once you're ready to commit to that extra piece of infrastructure,
+rather than bolt on something insecure now.
+
+## Protein estimate accuracy
+
+The protein-per-ingredient figures use common, widely published reference
+values (`PROTEIN_PER_100G` in `lib/recipes.js`) — the kind found on typical
+nutrition labels — not a single verified lab source. Treat every number as
+indicative only; the real figure shifts with exact variety, brand, and
+cooking method. The site says this on-screen wherever protein appears.
 
 ## Notes on the "Other" goal
 

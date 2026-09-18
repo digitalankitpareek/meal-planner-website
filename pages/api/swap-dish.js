@@ -11,6 +11,8 @@ const {
   RECIPE_BY_ID,
   ING_BY_ID,
   YOUTUBE_LINKS,
+  RECIPE_BLURBS,
+  estimateProteinG,
   MEAL_SLOT_DEFS,
   goalAdjustedScore,
   getCurrentSeason,
@@ -24,6 +26,7 @@ function serializeDish(rec, adults, kids, kidFactor) {
     id: rec.id,
     name: rec.name,
     course: rec.course,
+    blurb: RECIPE_BLURBS[rec.id] || null,
     emoji: getDishEmoji(rec),
     effort: rec.effort,
     oilLevel: rec.oilLevel,
@@ -34,12 +37,15 @@ function serializeDish(rec, adults, kids, kidFactor) {
       .filter(({ meta }) => meta && meta.category !== "spice" && meta.category !== "oil")
       .map(({ ing, meta }) => {
         const rawQty = scaleQty(ing.qty, adults, kids, kidFactor);
+        const proteinApplicable = meta.unit === "g" || meta.unit === "ml";
+        const proteinG = proteinApplicable ? estimateProteinG(ing.id, rawQty) : null;
         return {
           name: meta.name,
           category: meta.category,
           unit: meta.unit,
           qty: Math.round(rawQty * 100) / 100,
           display: formatQty(rawQty, meta.unit),
+          proteinG: proteinG !== null ? Math.round(proteinG * 10) / 10 : null,
         };
       }),
   };

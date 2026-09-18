@@ -13,6 +13,8 @@ const {
   RECIPE_BY_ID,
   ING_BY_ID,
   YOUTUBE_LINKS,
+  RECIPE_BLURBS,
+  estimateProteinG,
   generateWeek,
   getCurrentSeason,
   getMonday,
@@ -101,6 +103,7 @@ function serializePlanForResponse(plan, adults, kids, kidFactor) {
           id: rec.id,
           name: rec.name,
           course: rec.course, // needed client-side so "swap" fetches from the same course group
+          blurb: RECIPE_BLURBS[rec.id] || null,
           emoji: getDishEmoji(rec),
           effort: rec.effort,
           oilLevel: rec.oilLevel,
@@ -111,12 +114,19 @@ function serializePlanForResponse(plan, adults, kids, kidFactor) {
             .filter(({ meta }) => meta && meta.category !== "spice" && meta.category !== "oil")
             .map(({ ing, meta }) => {
               const rawQty = scaleQty(ing.qty, adults, kids, kidFactor);
+              // Protein-per-100 figures are weight/volume based, so a "piece" or
+              // "bunch" unit (e.g. bread slices, a bunch of curry leaves) can't be
+              // run through the same formula without producing a nonsense number —
+              // skip the estimate there rather than show something misleading.
+              const proteinApplicable = meta.unit === "g" || meta.unit === "ml";
+              const proteinG = proteinApplicable ? estimateProteinG(ing.id, rawQty) : null;
               return {
                 name: meta.name,
                 category: meta.category, // used to group the grocery list (vegetable/grain/dal/dairy)
                 unit: meta.unit,
                 qty: Math.round(rawQty * 100) / 100, // raw number — grocery list sums these
                 display: formatQty(rawQty, meta.unit), // pre-formatted for per-dish display
+                proteinG: proteinG !== null ? Math.round(proteinG * 10) / 10 : null,
               };
             }),
         }));

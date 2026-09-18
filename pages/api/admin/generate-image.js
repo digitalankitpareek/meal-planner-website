@@ -60,6 +60,7 @@ export default async function handler(req, res) {
         model: "gpt-image-1",
         prompt,
         size: "1024x1024",
+        output_format: "jpeg",
       }),
     });
 

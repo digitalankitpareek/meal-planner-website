@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const SITE_NAME = "Vegetarian Meal Planner";
 
@@ -17,6 +17,16 @@ const MEAL_OPTIONS = [
 ];
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+// The plan's underlying data is always keyed Monday(0)...Sunday(6) internally
+// (that's what the rotation/season logic uses), but we DISPLAY it starting
+// from the visitor's actual today, using their browser's local date — so a
+// Thursday visitor sees Thursday, Friday, ... wrapping to Monday-Wednesday.
+function getDisplayDayOrder() {
+  const jsDay = new Date().getDay(); // 0=Sun..6=Sat
+  const todayIndex = (jsDay + 6) % 7; // convert to 0=Mon..6=Sun
+  return Array.from({ length: 7 }, (_, i) => (todayIndex + i) % 7);
+}
 
 const GROCERY_GROUP_LABELS = {
   vegetable: "Sabzi Mandi",
@@ -75,6 +85,12 @@ function DishImage({ dish, size = 56 }) {
 }
 
 function DishRow({ dish, onSwap, swapping }) {
+  const [showRecipe, setShowRecipe] = useState(false);
+  const hasProtein = dish.ingredients.some((i) => i.proteinG !== null && i.proteinG !== undefined);
+  const totalProtein = hasProtein
+    ? Math.round(dish.ingredients.reduce((sum, i) => sum + (i.proteinG || 0), 0) * 10) / 10
+    : null;
+
   return (
     <div className="dish-row">
       <DishImage dish={dish} />
@@ -84,13 +100,41 @@ function DishRow({ dish, onSwap, swapping }) {
         </div>
         {dish.ingredients.length > 0 && (
           <div style={{ fontSize: 12.5, color: "var(--charcoal-soft)", marginTop: 2 }}>
-            {dish.ingredients.map((i) => `${i.name} (${i.display})`).join(", ")}
+            {dish.ingredients
+              .map((i) => `${i.name} (${i.display}${i.proteinG ? `, ~${i.proteinG}g protein` : ""})`)
+              .join(", ")}
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+        {totalProtein !== null && (
+          <div style={{ fontSize: 12, color: "var(--leaf-deep)", marginTop: 2, fontWeight: 600 }}>
+            ~{totalProtein}g protein total (estimate)
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+          {dish.blurb && (
+            <button className="dish-swap-btn" onClick={() => setShowRecipe(!showRecipe)}>
+              {showRecipe ? "Hide recipe" : "📖 Recipe"}
+            </button>
+          )}
           {dish.youtubeUrl && (
-            <a href={dish.youtubeUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, fontWeight: 600 }}>
-              ▶ Recipe video
+            <a
+              href={dish.youtubeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--white)",
+                background: "var(--tomato)",
+                padding: "6px 12px",
+                borderRadius: 6,
+              }}
+            >
+              ▶ Watch Recipe Video
             </a>
           )}
           {onSwap && (
@@ -99,6 +143,12 @@ function DishRow({ dish, onSwap, swapping }) {
             </button>
           )}
         </div>
+
+        {showRecipe && dish.blurb && (
+          <div style={{ fontSize: 13, color: "var(--charcoal)", background: "var(--leaf-light)", borderRadius: 8, padding: 10, marginTop: 8, lineHeight: 1.5 }}>
+            {dish.blurb}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -236,7 +286,9 @@ function Navbar() {
   return (
     <header className="navbar">
       <div className="container navbar-inner">
-        <div className="navbar-logo">🥦 {SITE_NAME}</div>
+        <a href="/" className="navbar-logo" style={{ textDecoration: "none" }}>
+          🥦 {SITE_NAME}
+        </a>
         <nav className="navbar-links">
           <a href="#how-it-works">How it works</a>
           <a href="#why-us">Why us</a>
@@ -362,6 +414,8 @@ function Footer() {
 
 const emptyMember = { age: "", gender: "", weightKg: "", heightCm: "" };
 
+const SESSION_KEY = "vmp_session_v1";
+
 function PlannerWizard() {
   const [step, setStep] = useState("goal");
   const [goal, setGoal] = useState(null);
@@ -375,6 +429,57 @@ function PlannerWizard() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [swappingKey, setSwappingKey] = useState(null);
+  const [restored, setRestored] = useState(false);
+
+  const dayOrder = getDisplayDayOrder();
+
+  // Restore a previous session after refresh — this is what actually fixes
+  // "logged out on every refresh": we're not doing real authentication here,
+  // just remembering your in-progress or completed plan in THIS browser.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved.step) setStep(saved.step);
+        if (saved.goal !== undefined) setGoal(saved.goal);
+        if (saved.customGoal !== undefined) setCustomGoal(saved.customGoal);
+        if (saved.members) setMembers(saved.members);
+        if (saved.selectedMeals) setSelectedMeals(saved.selectedMeals);
+        if (saved.planData) setPlanData(saved.planData);
+        if (saved.unlocked) setUnlocked(saved.unlocked);
+      }
+    } catch (e) {
+      /* corrupt or unavailable storage — just start fresh */
+    }
+    setRestored(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return; // don't overwrite saved data with initial defaults before restore runs
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ step, goal, customGoal, members, selectedMeals, planData, unlocked }));
+    } catch (e) {
+      /* storage full or blocked — session just won't persist */
+    }
+  }, [restored, step, goal, customGoal, members, selectedMeals, planData, unlocked]);
+
+  const resetAll = () => {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch (e) {
+      /* ignore */
+    }
+    setStep("goal");
+    setGoal(null);
+    setCustomGoal("");
+    setMembers([{ ...emptyMember }]);
+    setSelectedMeals(["breakfast", "lunch", "dinner"]);
+    setPlanData(null);
+    setUnlocked(false);
+    setLead({ name: "", phone: "", email: "" });
+  };
 
   const canContinueGoal = goal && (goal !== "other" || customGoal.trim().length > 0);
   const canContinueHousehold = members.length > 0 && members.every((m) => String(m.age).trim() !== "" && Number(m.age) > 0);
@@ -618,21 +723,34 @@ function PlannerWizard() {
 
       {showingPlan && planData && (
         <section>
-          {planData.note && (
-            <div style={{ background: "var(--leaf-light)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 14, maxWidth: 720 }}>
-              {planData.note}
-            </div>
-          )}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            {planData.note && (
+              <div style={{ background: "var(--leaf-light)", border: "1px solid var(--line)", borderRadius: 12, padding: 14, marginBottom: 20, fontSize: 14, maxWidth: 720, flex: 1 }}>
+                {planData.note}
+              </div>
+            )}
+            <button className="btn-secondary" onClick={resetAll} style={{ whiteSpace: "nowrap" }}>
+              Start a new plan
+            </button>
+          </div>
+
+          {planData.plan[String(dayOrder[0])] &&
+            Object.values(planData.plan[String(dayOrder[0])]).some((dishes) => dishes.some((d) => d.ingredients.some((i) => i.proteinG))) && (
+              <div style={{ fontSize: 12, color: "var(--charcoal-soft)", marginBottom: 16 }}>
+                Protein figures are approximate, common reference values — not lab-verified. Check packaging or a
+                nutrition database for anything precise.
+              </div>
+            )}
 
           {!unlocked && (
             <>
               <div className="week-grid" style={{ marginBottom: 20 }}>
-                <DayCard dayIndex={0} dayPlan={planData.plan["0"]} selectedMeals={selectedMeals} onSwapDish={handleSwapDish} swappingKey={swappingKey} />
+                <DayCard dayIndex={dayOrder[0]} dayPlan={planData.plan[String(dayOrder[0])]} selectedMeals={selectedMeals} onSwapDish={handleSwapDish} swappingKey={swappingKey} />
               </div>
 
               <div style={{ position: "relative" }}>
                 <div className="week-grid" style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.55 }}>
-                  {[1, 2, 3].map((d) => (
+                  {dayOrder.slice(1, 4).map((d) => (
                     <DayCard key={d} dayIndex={d} dayPlan={planData.plan[String(d)]} selectedMeals={selectedMeals} />
                   ))}
                 </div>
@@ -662,7 +780,7 @@ function PlannerWizard() {
           {unlocked && (
             <>
               <div className="week-grid">
-                {[0, 1, 2, 3, 4, 5, 6].map((d) => (
+                {dayOrder.map((d) => (
                   <DayCard
                     key={d}
                     dayIndex={d}

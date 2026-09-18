@@ -68,7 +68,7 @@ export default function AdminImages() {
               <div style={{ fontSize: 12, color: "var(--charcoal-soft)", marginBottom: 8 }}>{rec.id}.jpg</div>
               {r.base64 && (
                 <img
-                  src={`data:image/png;base64,${r.base64}`}
+                  src={`data:image/jpeg;base64,${r.base64}`}
                   alt={rec.name}
                   style={{ width: "100%", borderRadius: 8, marginBottom: 8 }}
                 />
@@ -82,7 +82,7 @@ export default function AdminImages() {
                   <a
                     className="btn-secondary"
                     style={{ display: "inline-flex", alignItems: "center" }}
-                    href={`data:image/png;base64,${r.base64}`}
+                    href={`data:image/jpeg;base64,${r.base64}`}
                     download={r.filename}
                   >
                     Download
